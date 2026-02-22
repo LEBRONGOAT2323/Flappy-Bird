@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Flappy Bird Ultra</title>
+<style>
+  body { margin: 0; overflow: hidden; }
+  canvas { display: block; margin: auto; }
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+canvas.width = 400;
+canvas.height = 600;
+
+// ===== SETTINGS =====
+const GRAVITY = 0.35;
+const JUMP_FORCE = -6.5;
+const PIPE_SPEED = 2;
+const PIPE_GAP = 200;
+const MAX_FALL_SPEED = 8;
+
+// Bird
+let bird = {
+  x: 90,
+  y: 300,
+  radius: 16,
+  velocity: 0,
+  rotation: 0
+};
+
+let pipes = [];
+let frame = 0;
+let score = 0;
+let gameOver = false;
+let groundOffset = 0;
+let flash = 0;
+let shakePower = 0;
+
+// Clouds
+let clouds = [];
+for (let i = 0; i < 6; i++) {
+  clouds.push({
+    x: Math.random() * canvas.width,
+    y: Math.random() * 200,
+    size: 30 + Math.random() * 20,
+    speed: 0.3 + Math.random() * 0.5
+  });
+}
+
+// Controls
+function jump() {
+  if (gameOver) {
+    resetGame();
+    return;
+  }
+  bird.velocity = JUMP_FORCE;
+  shakePower = 4;
+}
+
+document.addEventListener("keydown", jump);
+document.addEventListener("click", jump);
+
+function resetGame() {
+  bird.y = 300;
+  bird.velocity = 0;
+  pipes = [];
+  score = 0;
+  frame = 0;
+  gameOver = false;
+}
+
+function createPipe() {
+  let topHeight = Math.random() * (canvas.height - PIPE_GAP - 150) + 75;
+  pipes.push({
+    x: canvas.width,
+    top: topHeight,
+    bottom: topHeight + PIPE_GAP,
+    passed: false
+  });
+}
+
+function update() {
+  if (!gameOver) {
+    frame++;
+    bird.velocity += GRAVITY;
+    if (bird.velocity > MAX_FALL_SPEED) bird.velocity = MAX_FALL_SPEED;
+    bird.y += bird.velocity;
+
+    bird.rotation = Math.min(Math.max(bird.velocity / 12, -0.5), 0.8);
+
+    if (frame % 110 === 0) createPipe();
+
+    for (let pipe of pipes) {
+      pipe.x -= PIPE_SPEED;
+
+      if (!pipe.passed && pipe.x + 70 < bird.x) {
+        pipe.passed = true;
+        score++;
+      }
+
+      if (
+        bird.x + bird.radius > pipe.x &&
+        bird.x - bird.radius < pipe.x + 70 &&
+        (bird.y - bird.radius < pipe.top ||
+         bird.y + bird.radius > pipe.bottom)
+      ) {
+        gameOver = true;
+        flash = 15;
+        shakePower = 10;
+      }
+    }
+
+    if (bird.y + bird.radius > canvas.height - 60 || bird.y - bird.radius < 0) {
+      gameOver = true;
+      flash = 15;
+    }
+  }
+
+  if (flash > 0) flash--;
+
+  groundOffset -= PIPE_SPEED;
+  if (groundOffset <= -40) groundOffset = 0;
+
+  for (let cloud of clouds) {
+    cloud.x -= cloud.speed;
+    if (cloud.x < -cloud.size) {
+      cloud.x = canvas.width + 50;
+      cloud.y = Math.random() * 200;
+    }
+  }
+  
+  if (shakePower > 0) {
+  shakePower *= 0.85; 
+  if (shakePower < 0.5) shakePower = 0;
+}
+  
+}
+
+function drawBackground() {
+  // Sky gradient
+  let grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  grad.addColorStop(0, "#4ec0ca");
+  grad.addColorStop(1, "#bdf6ff");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Mountains
+  ctx.fillStyle = "#6ab04c";
+  ctx.beginPath();
+  ctx.moveTo(0, 450);
+  ctx.lineTo(80, 350);
+  ctx.lineTo(160, 450);
+  ctx.lineTo(240, 370);
+  ctx.lineTo(320, 450);
+  ctx.lineTo(400, 380);
+  ctx.lineTo(400, 600);
+  ctx.lineTo(0, 600);
+  ctx.fill();
+
+  // Clouds
+  ctx.fillStyle = "white";
+  for (let c of clouds) {
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, c.size, 0, Math.PI * 2);
+    ctx.arc(c.x + c.size, c.y + 10, c.size * 0.8, 0, Math.PI * 2);
+    ctx.arc(c.x - c.size, c.y + 10, c.size * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawPipes() {
+  for (let pipe of pipes) {
+    // Pipe body gradient
+    let grad = ctx.createLinearGradient(pipe.x, 0, pipe.x + 70, 0);
+    grad.addColorStop(0, "#2ecc71");
+    grad.addColorStop(1, "#27ae60");
+    ctx.fillStyle = grad;
+
+    ctx.fillRect(pipe.x, 0, 70, pipe.top);
+    ctx.fillRect(pipe.x, pipe.bottom, 70, canvas.height);
+
+    // Pipe cap
+    ctx.fillStyle = "#1e8449";
+    ctx.fillRect(pipe.x - 5, pipe.top - 20, 80, 20);
+    ctx.fillRect(pipe.x - 5, pipe.bottom, 80, 20);
+  }
+}
+
+function drawGround() {
+  ctx.fillStyle = "#d4a017";
+  ctx.fillRect(0, canvas.height - 60, canvas.width, 60);
+
+  ctx.fillStyle = "#b8860b";
+  for (let i = 0; i < canvas.width / 40 + 2; i++) {
+    ctx.fillRect(i * 40 + groundOffset, canvas.height - 60, 20, 60);
+  }
+}
+
+function drawBird() {
+  ctx.save();
+  ctx.translate(bird.x, bird.y);
+  ctx.rotate(bird.rotation);
+
+  // Shadow
+  ctx.fillStyle = "rgba(0,0,0,0.2)";
+  ctx.beginPath();
+  ctx.ellipse(0, 18, 12, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Body gradient
+  let grad = ctx.createRadialGradient(-5, -5, 5, 0, 0, bird.radius);
+  grad.addColorStop(0, "#fff176");
+  grad.addColorStop(1, "#fbc02d");
+  ctx.fillStyle = grad;
+
+  ctx.beginPath();
+  ctx.arc(0, 0, bird.radius, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Wing animation
+  ctx.fillStyle = "#f57c00";
+  ctx.beginPath();
+  ctx.ellipse(-5, 5 + Math.sin(frame / 5) * 5, 12, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Eye
+  ctx.fillStyle = "white";
+  ctx.beginPath();
+  ctx.arc(6, -5, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "black";
+  ctx.beginPath();
+  ctx.arc(8, -5, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Beak
+  ctx.fillStyle = "#ff9800";
+  ctx.beginPath();
+  ctx.moveTo(14, 0);
+  ctx.lineTo(22, 4);
+  ctx.lineTo(14, 8);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawUI() {
+  ctx.fillStyle = "white";
+  ctx.font = "bold 48px Arial";
+  ctx.strokeStyle = "black";
+  ctx.lineWidth = 4;
+  ctx.strokeText(score, canvas.width / 2 - 15, 90);
+  ctx.fillText(score, canvas.width / 2 - 15, 90);
+
+  if (gameOver) {
+    ctx.font = "bold 40px Arial";
+    ctx.strokeText("Game Over", 70, 300);
+    ctx.fillText("Game Over", 70, 300);
+
+    ctx.font = "20px Arial";
+    ctx.fillText("Click to Restart", 130, 340);
+  }
+}
+
+function drawFlash() {
+  if (flash > 0) {
+    ctx.fillStyle = `rgba(255,255,255,${flash/20})`;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+}
+
+function draw() {
+  ctx.save();
+
+  if (shakePower > 0) {
+    let dx = (Math.random() - 0.5) * shakePower;
+    let dy = (Math.random() - 0.5) * shakePower;
+    ctx.translate(dx, dy);
+  }
+
+  drawBackground();
+  drawPipes();
+  drawGround();
+  drawBird();
+  drawUI();
+  drawFlash();
+
+  ctx.restore();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+
+</body>
+</html>
